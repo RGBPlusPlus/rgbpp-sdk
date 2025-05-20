@@ -1,10 +1,13 @@
 # @rgbpp-sdk/service
 
+## 0.7.1
+
 ## 0.7.0
 
 ### Minor Changes
 
 - [#291](https://github.com/utxostack/rgbpp-sdk/pull/291): Support RGB++ compatible xUDT assets([@duanyytop](https://github.com/duanyytop))
+
   - Add `assets/type` API to the service package
 
 - [#293](https://github.com/utxostack/rgbpp-sdk/pull/293): Add offline btc data source & ckb collector ([@fghdotio](https://github.com/fghdotio))
