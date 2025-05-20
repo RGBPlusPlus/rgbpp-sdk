@@ -79,7 +79,7 @@ const transfer = async ({ rgbppLockArgsList, toBtcAddress, xudtTypeArgs, transfe
 // rgbppLockArgs: outIndexU32 + btcTxId
 transfer({
   rgbppLockArgsList: [buildRgbppLockArgs(readStepLog('prepare-utxo').index, readStepLog('prepare-utxo').txid)],
-  toBtcAddress: 'tb1qtt2vh9q8xam35xxsy35ec6majad8lz8fep8w04',
+  toBtcAddress: btcAccount.from,
   xudtTypeArgs: readStepLog('xUDT-type-script').args,
   transferAmount: BigInt(500_0000_0000),
 });

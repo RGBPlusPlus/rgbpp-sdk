@@ -137,7 +137,7 @@ createSpores({
   ),
   receivers: [
     {
-      toBtcAddress: 'tb1qssu8pscsuevnmvhnr08840wvuzdan27k9m46ja',
+      toBtcAddress: btcAccount.from,
       sporeData: {
         contentType: 'text/plain',
         content: utf8ToBuffer('First Spore'),
@@ -146,7 +146,7 @@ createSpores({
       },
     },
     {
-      toBtcAddress: 'tb1qssu8pscsuevnmvhnr08840wvuzdan27k9m46ja',
+      toBtcAddress: btcAccount.from,
       sporeData: {
         contentType: 'text/plain',
         content: utf8ToBuffer('Second Spore'),
