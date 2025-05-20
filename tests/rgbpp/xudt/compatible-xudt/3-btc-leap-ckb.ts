@@ -1,7 +1,7 @@
 import { buildRgbppLockArgs, CompatibleXUDTRegistry } from 'rgbpp/ckb';
 import { serializeScript } from '@nervosnetwork/ckb-sdk-utils';
 import { genBtcJumpCkbVirtualTx, sendRgbppUtxos } from 'rgbpp';
-import { isMainnet, collector, btcService, btcDataSource, btcAccount, BTC_TESTNET_TYPE } from '../../env';
+import { isMainnet, collector, btcService, btcDataSource, btcAccount, BTC_TESTNET_TYPE, ckbAddress } from '../../env';
 import { getFastestFeeRate, readStepLog } from '../../shared/utils';
 import { saveCkbVirtualTxResult } from '../../../../examples/rgbpp/shared/utils';
 import { signAndSendPsbt } from '../../../../examples/rgbpp/shared/btc-account';
@@ -92,7 +92,7 @@ const leapFromBtcToCKB = async ({
 // rgbppLockArgs: outIndexU32 + btcTxId
 leapFromBtcToCKB({
   rgbppLockArgsList: [buildRgbppLockArgs(readStepLog('transfer-id').index, readStepLog('transfer-id').txid)],
-  toCkbAddress: 'ckt1qrfrwcdnvssswdwpn3s9v8fp87emat306ctjwsm3nmlkjg8qyza2cqgqq9kxr7vy7yknezj0vj0xptx6thk6pwyr0sxamv6q',
+  toCkbAddress: ckbAddress,
   compatibleXudtTypeScript: {
     codeHash: '0x1142755a044bf2ee358cba9f2da187ce928c91cd4dc8692ded0337efa677d21a',
     hashType: 'type',
