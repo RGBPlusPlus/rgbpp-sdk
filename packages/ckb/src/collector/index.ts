@@ -36,6 +36,8 @@ export class Collector {
   private ckbNodeUrl: string;
   private ckbIndexerUrl: string;
 
+  protected static GET_CELLS_PAGE_SIZE = 100;
+
   constructor({ ckbNodeUrl, ckbIndexerUrl }: { ckbNodeUrl: string; ckbIndexerUrl: string }) {
     this.ckbNodeUrl = ckbNodeUrl;
     this.ckbIndexerUrl = ckbIndexerUrl;
@@ -75,34 +77,55 @@ export class Collector {
         script_type: 'type',
       };
     }
-    const payload = {
-      id: Math.floor(Math.random() * 100000),
-      jsonrpc: '2.0',
-      method: 'get_cells',
-      params: [searchKey, 'asc', '0x3E8'],
-    };
-    const body = JSON.stringify(payload, null, '  ');
-    const response = (
-      await axios({
-        method: 'post',
-        url: this.ckbIndexerUrl,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 20000,
-        data: body,
-      })
-    ).data;
-    if (response.error) {
-      console.error(response.error);
-      throw new IndexerError('Get cells from indexer error');
-    } else {
-      const res = toCamelcase<IndexerCell[]>(response.result.objects);
+
+    let allCells: IndexerCell[] = [];
+    let lastCursor: string | undefined;
+    let hasMoreCells = true;
+
+    while (hasMoreCells) {
+      const payload = {
+        id: Math.floor(Math.random() * 100000),
+        jsonrpc: '2.0',
+        method: 'get_cells',
+        params: [searchKey, 'asc', `0x${Collector.GET_CELLS_PAGE_SIZE.toString(16)}`, lastCursor],
+      };
+      const body = JSON.stringify(payload, null, '  ');
+      const response = (
+        await axios({
+          method: 'post',
+          url: this.ckbIndexerUrl,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 20000,
+          data: body,
+        })
+      ).data;
+
+      if (response.error) {
+        console.error(response.error);
+        throw new IndexerError('Get cells from indexer error');
+      }
+
+      if (!response.result) {
+        throw new IndexerError('Invalid response from indexer: result is empty');
+      }
+
+      const { objects, last_cursor: newLastCursor } = response.result;
+      const res = toCamelcase<IndexerCell[]>(objects);
       if (res === null) {
         throw new IndexerError('The response of indexer RPC get_cells is invalid');
       }
-      return res;
+
+      allCells = allCells.concat(res);
+
+      if (!newLastCursor || objects.length < Collector.GET_CELLS_PAGE_SIZE) {
+        hasMoreCells = false;
+      }
+      lastCursor = newLastCursor;
     }
+
+    return allCells;
   }
 
   collectInputs(liveCells: IndexerCell[], needCapacity: bigint, fee: bigint, config?: CollectConfig): CollectResult {
@@ -170,5 +193,29 @@ export class Collector {
     const ckb = new CKB(this.ckbNodeUrl);
     const batch = ckb.rpc.createBatchRequest(outPoints.map((outPoint) => ['getLiveCell', outPoint, withData]));
     return batch.exec().then((liveCells) => liveCells.map((liveCell) => liveCell.cell));
+  }
+}
+
+export class CollectorFactory {
+  static createCollector({
+    ckbNodeUrl,
+    ckbIndexerUrl,
+    pageSize,
+  }: {
+    ckbNodeUrl: string;
+    ckbIndexerUrl: string;
+    pageSize?: number;
+  }): Collector {
+    if (pageSize === undefined) {
+      return new Collector({ ckbNodeUrl, ckbIndexerUrl });
+    }
+
+    if (pageSize <= 0) {
+      throw new Error('Page size must be greater than 0');
+    }
+
+    return new (class extends Collector {
+      protected static readonly GET_CELLS_PAGE_SIZE = pageSize as number;
+    })({ ckbNodeUrl, ckbIndexerUrl });
   }
 }
