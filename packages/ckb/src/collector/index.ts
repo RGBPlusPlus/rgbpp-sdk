@@ -191,8 +191,28 @@ export class Collector {
 
   async getLiveCells(outPoints: CKBComponents.OutPoint[], withData = false): Promise<CKBComponents.LiveCell[]> {
     const ckb = new CKB(this.ckbNodeUrl);
-    const batch = ckb.rpc.createBatchRequest(outPoints.map((outPoint) => ['getLiveCell', outPoint, withData]));
-    return batch.exec().then((liveCells) => liveCells.map((liveCell) => liveCell.cell));
+
+    try {
+      const batch = ckb.rpc.createBatchRequest(outPoints.map((outPoint) => ['getLiveCell', outPoint, withData]));
+      const liveCells = await batch.exec();
+      return liveCells.map((liveCell) => liveCell.cell);
+    } catch (error) {
+      console.warn(
+        `batch RPC request failed: ${error instanceof Error ? error.message : 'Unknown error'}, using fallback implementation`,
+      );
+      const ckb = new CKB(this.ckbNodeUrl);
+      const batchSize = 10;
+      const liveCells: CKBComponents.LiveCell[] = [];
+
+      for (let i = 0; i < outPoints.length; i += batchSize) {
+        const outPointBatch = outPoints.slice(i, i + batchSize);
+        const liveCellPromises = outPointBatch.map((outPoint) => ckb.rpc.getLiveCell(outPoint, withData));
+        const liveCellResults = await Promise.all(liveCellPromises);
+        liveCells.push(...liveCellResults.map((result) => result.cell));
+      }
+
+      return liveCells;
+    }
   }
 }
 
