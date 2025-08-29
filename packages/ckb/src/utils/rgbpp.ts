@@ -16,12 +16,13 @@ import { Script } from '../schemas/generated/blockchain';
 import { BytesLike } from '@ckb-lumos/codec';
 import { toCamelcase } from './case-parser';
 import {
+  CapacityNotEnoughError,
   InputsOrOutputsLenError,
   NoRgbppLiveCellError,
   RgbppCkbTxInputsExceededError,
   RgbppUtxoBindMultiTypeAssetsError,
 } from '../error';
-import { calculateRgbppCellCapacity, isScriptEqual, isUDTTypeSupported } from './ckb-tx';
+import { calculateCellOccupiedCapacity, calculateRgbppCellCapacity, isScriptEqual, isUDTTypeSupported } from './ckb-tx';
 import { blockchain } from '@ckb-lumos/base';
 import {
   bytesToHex,
@@ -71,10 +72,38 @@ export const genBtcTimeLockScript = (
   } as CKBComponents.Script;
 };
 
+/**
+ * Asserts that each output has sufficient capacity
+ * @throws {CapacityNotEnoughError} When any output has insufficient capacity
+ */
+export const assertOutputsCapacitySufficient = (
+  rgbppVirtualTx: RgbppCkbVirtualTx | CKBComponents.RawTransaction,
+): void => {
+  const errors: string[] = [];
+
+  rgbppVirtualTx.outputs.forEach((output, i) => {
+    const minCapacity = calculateCellOccupiedCapacity({
+      output,
+      outputData: rgbppVirtualTx.outputsData[i],
+    } as IndexerCell);
+    const actualCapacity = BigInt(output.capacity);
+
+    if (actualCapacity < minCapacity) {
+      errors.push(`Output ${i}: ${actualCapacity.toString(10)} < ${minCapacity.toString(10)}`);
+    }
+  });
+
+  if (errors.length > 0) {
+    throw new CapacityNotEnoughError(`Insufficient capacity in outputs:\n${errors.join('\n')}`);
+  }
+};
+
 // The maximum length of inputs and outputs is 255, and the field type representing the length in the RGB++ protocol is Uint8
 const MAX_RGBPP_CELL_NUM = 255;
 // refer to https://github.com/ckb-cell/rgbpp/blob/0c090b039e8d026aad4336395b908af283a70ebf/contracts/rgbpp-lock/src/main.rs#L173-L211
 export const calculateCommitment = (rgbppVirtualTx: RgbppCkbVirtualTx | CKBComponents.RawTransaction): Hex => {
+  assertOutputsCapacitySufficient(rgbppVirtualTx);
+
   const hash = sha256.create();
   hash.update(hexToBytes(utf8ToHex('RGB++')));
   const version = [0, 0];
