@@ -191,8 +191,22 @@ export const genBtcJumpCkbVirtualTx = async ({
     const txSize =
       getTransactionSize(ckbRawTx) + (witnessLockPlaceholderSize ?? estimateWitnessSize(deduplicatedLockArgsList));
     const estimatedTxFee = calculateTransactionFee(txSize, ckbFeeRate);
-    const changeCapacity = BigInt(outputs[outputs.length - 1].capacity) - estimatedTxFee;
-    ckbRawTx.outputs[ckbRawTx.outputs.length - 1].capacity = append0x(changeCapacity.toString(16));
+
+    // take tx fee into account to determine if paymaster cell is needed
+    const lastOutput = ckbRawTx.outputs[ckbRawTx.outputs.length - 1];
+    const lastOutputData = ckbRawTx.outputsData[ckbRawTx.outputs.length - 1] ?? '0x';
+    if (
+      BigInt(lastOutput.capacity) >=
+      estimatedTxFee + calculateCellOccupiedCapacity({ output: lastOutput, outputData: lastOutputData } as IndexerCell)
+    ) {
+      // tx fee is placed in the last output if no paymaster cell is needed
+      const changeCapacity = BigInt(outputs[outputs.length - 1].capacity) - estimatedTxFee;
+      ckbRawTx.outputs[ckbRawTx.outputs.length - 1].capacity = append0x(changeCapacity.toString(16));
+    } else {
+      // tx fee and change are handled by paymaster cell
+      needPaymasterCell = true;
+      ckbRawTx.cellDeps.push(getSecp256k1CellDep(isMainnet));
+    }
   }
 
   const virtualTx: RgbppCkbVirtualTx = {
