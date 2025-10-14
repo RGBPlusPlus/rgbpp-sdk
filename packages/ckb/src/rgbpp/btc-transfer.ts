@@ -29,7 +29,6 @@ import {
   addressToScriptHash,
   isOfflineMode,
   adjustVirtualTxForTxFee,
-  calculateCellOccupiedCapacity,
 } from '../utils';
 import { Hex, IndexerCell } from '../types';
 import {
@@ -94,8 +93,8 @@ export const genBtcTransferCkbVirtualTx = async ({
 
   let inputs: CKBComponents.CellInput[] = [];
   let sumInputsCapacity = BigInt(0);
-  let outputs: CKBComponents.CellOutput[] = [];
-  let outputsData: Hex[] = [];
+  const outputs: CKBComponents.CellOutput[] = [];
+  const outputsData: Hex[] = [];
   let needPaymasterCell = false;
 
   // The non-target RGBPP outputs correspond to the RGBPP inputs one-to-one, and the outputs are still bound to the sender’s BTC UTXOs
@@ -142,51 +141,36 @@ export const genBtcTransferCkbVirtualTx = async ({
     sumInputsCapacity = collectResult.sumInputsCapacity;
 
     const rgbppCellCapacity = calculateRgbppCellCapacity(xudtType);
-    const rgbppLock = genRgbppLockScript(buildPreLockArgs(1), isMainnet, btcTestnetType);
-    const rgbppLockOutput = {
-      lock: rgbppLock,
-      type: xudtType,
-      capacity: '0x0',
-    };
-    const rgbppLockOutputData = append0x(u128ToLe(transferAmount));
-    const minRgbppLockOutputCapacity = calculateCellOccupiedCapacity({
-      output: rgbppLockOutput,
-      outputData: rgbppLockOutputData,
-    } as IndexerCell);
 
     const needRgbppChange = collectResult.sumAmount > transferAmount;
+    // To simplify, when the xUDT does not need change, all the capacity of the inputs will be given to the receiver
+    const candidateReceiverOutputCapacity = needRgbppChange
+      ? BigInt(rgbppTargetCells[0].output.capacity)
+      : sumInputsCapacity;
+    const receiverOutputCapacity =
+      candidateReceiverOutputCapacity >= rgbppCellCapacity ? candidateReceiverOutputCapacity : rgbppCellCapacity;
 
-    let receiverOutputCapacity: bigint;
-    let udtChangeOutput: CKBComponents.CellOutput | null = null;
-    let udtChangeOutputData: Hex | null = null;
+    // The Vouts[0] for OP_RETURN and Vouts[1] for target transfer RGBPP assets
+    outputs.push({
+      lock: genRgbppLockScript(buildPreLockArgs(1), isMainnet, btcTestnetType),
+      type: xudtType,
+      capacity: append0x(receiverOutputCapacity.toString(16)),
+    });
+    outputsData.push(append0x(u128ToLe(transferAmount)));
+
+    const isCapacitySufficient = isRgbppCapacitySufficientForChange(sumInputsCapacity, receiverOutputCapacity);
+    needPaymasterCell = !isCapacitySufficient;
     if (needRgbppChange) {
-      const inputRgbppCellCapacity = BigInt(rgbppTargetCells[0].output.capacity);
-      receiverOutputCapacity =
-        inputRgbppCellCapacity > minRgbppLockOutputCapacity ? inputRgbppCellCapacity : rgbppCellCapacity;
-
-      const isCapacitySufficient = isRgbppCapacitySufficientForChange(sumInputsCapacity, receiverOutputCapacity);
-      needPaymasterCell = !isCapacitySufficient;
-
       // When the capacity of inputs is enough for the outputs, the sender needs to recover the excess capacity.
       const udtChangeCapacity = isCapacitySufficient ? sumInputsCapacity - receiverOutputCapacity : rgbppCellCapacity;
       // The Vouts[2] for target change RGBPP assets
-      udtChangeOutput = {
+      outputs.push({
         lock: genRgbppLockScript(buildPreLockArgs(2), isMainnet, btcTestnetType),
         type: xudtType,
         capacity: append0x(udtChangeCapacity.toString(16)),
-      };
-      udtChangeOutputData = append0x(u128ToLe(collectResult.sumAmount - transferAmount));
-    } else {
-      // To simplify, when the xUDT does not need change, all the capacity of the inputs will be given to the receiver
-      receiverOutputCapacity = sumInputsCapacity > minRgbppLockOutputCapacity ? sumInputsCapacity : rgbppCellCapacity;
-
-      needPaymasterCell = sumInputsCapacity < receiverOutputCapacity;
+      });
+      outputsData.push(append0x(u128ToLe(collectResult.sumAmount - transferAmount)));
     }
-    rgbppLockOutput.capacity = append0x(receiverOutputCapacity.toString(16));
-
-    // The Vouts[0] for OP_RETURN and Vouts[1] for target transfer RGBPP assets
-    outputs = [rgbppLockOutput, udtChangeOutput].filter((o): o is CKBComponents.CellOutput => o !== null);
-    outputsData = [rgbppLockOutputData, udtChangeOutputData].filter((d): d is Hex => d !== null);
 
     handleNonTargetRgbppCells(outputs.length);
   }
