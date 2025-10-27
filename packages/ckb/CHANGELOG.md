@@ -1,5 +1,14 @@
 # @rgbpp-sdk/ckb
 
+## 0.7.4
+
+### Patch Changes
+
+- [`ff6e116`](https://github.com/utxostack/rgbpp-sdk/commit/ff6e11611f995c10fd4875e787b44295a5a1f055): chore: update Mainnet cell deps and cell deps URL ([@fghdotio](https://github.com/fghdotio))
+
+- Updated dependencies []:
+  - @rgbpp-sdk/service@0.7.4
+
 ## 0.7.3
 
 ### Patch Changes
